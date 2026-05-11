@@ -43,7 +43,7 @@ var rule = {
         let pic = HOST + '/simg/' + id + '.jpg';
         let content = pdfh(html, 'meta[name=description]&&content');
         let subjects = pdfa(html, '.movie-list-subject-block:eq(0) .movie-list-subject').map((it) => pdfh(it, 'body&&Text')).filter(Boolean);
-        let eps = pdfa(html, '.play-btn');
+        let eps = pdfa(html, '.play-btn').reverse();
         let urls = eps.map((it) => {
             let ep = (pdfh(it, 'body&&Html').match(/ep_slug="([^"]+)"/) || [])[1];
             let name = pdfh(it, 'body&&Text');
