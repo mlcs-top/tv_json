@@ -5,9 +5,15 @@ ITalkBB TV - 海外华人影视
 """
 import re
 import json
-import subprocess
 import requests
+from datetime import datetime
 from base.spider import Spider
+
+try:
+    import js2py
+    HAS_JS2PY = True
+except ImportError:
+    HAS_JS2PY = False
 
 
 class Spider(Spider):
@@ -17,7 +23,17 @@ class Spider(Spider):
     def init(self, extend=""):
         pass
 
+    def isVideoFormat(self, url):
+        pass
+
+    def manualVideoCheck(self):
+        pass
+
+    def destroy(self):
+        pass
+
     def __init__(self):
+        self.name = 'ITalkBB TV'
         self.host = 'https://www.italkbbtv.com'
         self.header = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0',
@@ -25,8 +41,8 @@ class Spider(Spider):
         }
         self.timeout = 20
 
-        self.class_names = '电视剧&电影&综艺&动画'.split('&')
-        self.class_urls = 'drama/62c670dc1dca2d424404499c&movie/62ac4ef36e0b5a13ed291544&variety/62ce7417c7daaa4a5d3fea14&cartoon/62ac4e6e4beefe53586478ca'.split('&')
+        self.class_names = '电视剧&直播频道&短剧&综艺&电影&动画'.split('&')
+        self.class_urls = 'drama/62c670dc1dca2d424404499c&live/62ac4e2e4beefe535864769d&shorts/66b1d25cf2dde82c215f9b59&variety/62ce7417c7daaa4a5d3fea14&movie/62ac4ef36e0b5a13ed291544&cartoon/62ac4e6e4beefe53586478ca'.split('&')
 
         self.key_map = {
             'drama': 'dramaSeriesLists',
@@ -37,44 +53,37 @@ class Spider(Spider):
         }
 
     def get_nuxt_data(self, html):
-        """从HTML中提取并解析__NUXT__数据"""
+        if not html:
+            return None
         m = re.search(r'window\.__NUXT__=([\s\S]*?);</script>', html)
         if not m:
             return None
         js_expr = m.group(1)
         try:
-            result = subprocess.run(
-                ['node', '-e', f'process.stdout.write(JSON.stringify({js_expr}))'],
-                capture_output=True, timeout=15
-            )
-            if result.returncode == 0 and result.stdout:
-                return json.loads(result.stdout)
+            result = js2py.eval_js(js_expr)
+            return result.to_dict()
         except Exception as e:
             print(f"get_nuxt_data error: {e}")
         return None
 
     def pick_pic(self, obj):
-        """提取图片URL"""
         if not obj:
             return ''
         images = obj.get('images', {}) or {}
-        poster = (images.get('poster') or [''])[0] if images.get('poster') else ''
-        landscape = (images.get('landscape') or [''])[0] if images.get('landscape') else ''
+        poster_list = images.get('poster', []) or []
+        landscape_list = images.get('landscape', []) or []
+        poster = poster_list[0] if poster_list else ''
+        landscape = landscape_list[0] if landscape_list else ''
         return poster or landscape or obj.get('imgUrl', '')
 
     def join_stars(self, stars):
-        """拼接演员/导演名"""
         if not isinstance(stars, list):
             return ''
         return '/'.join([s.get('name', '') for s in stars if s.get('name')])
 
     def make_vod_from_series(self, series, fallback_name=''):
-        """从series对象构建vod字典"""
         if not series:
             return None
-        category_id = series.get('category_id', [])
-        if isinstance(category_id, list):
-            category_id = category_id[0] if category_id else ''
         root_id = series.get('root_id', '')
         series_id = series.get('id', '') or series.get('series_id', '')
         route = 'shortsPlay' if root_id == '66b1d25cf2dde82c215f9b59' else 'play'
@@ -86,7 +95,6 @@ class Spider(Spider):
         vod_year = ''
         if released_at:
             try:
-                from datetime import datetime
                 vod_year = str(datetime.fromtimestamp(released_at).year)
             except:
                 pass
@@ -103,8 +111,22 @@ class Spider(Spider):
             'vod_director': self.join_stars(stars.get('director', []) or [])
         }
 
+    def make_vod_from_channel(self, ch):
+        if not ch:
+            return None
+        return {
+            'vod_id': 'live@' + (ch.get('id', '') or ''),
+            'vod_name': ch.get('name', ''),
+            'vod_pic': self.pick_pic(ch),
+            'vod_remarks': ch.get('categoryName', '') or ch.get('rootName', ''),
+            'vod_year': '',
+            'type_name': ch.get('categoryName', ''),
+            'vod_content': '',
+            'vod_actor': '',
+            'vod_director': ''
+        }
+
     def make_vod_from_card(self, card):
-        """从card对象构建vod字典（搜索用）"""
         if not card:
             return None
         series = card.get('series') or card.get('target') or card
@@ -123,7 +145,6 @@ class Spider(Spider):
         return vod
 
     def unique_by_id(self, vod_list):
-        """按vod_id去重"""
         seen = {}
         result = []
         for v in vod_list:
@@ -133,23 +154,11 @@ class Spider(Spider):
                 result.append(v)
         return result
 
-    def fetch(self, url):
-        """发送GET请求"""
-        try:
-            resp = requests.get(url, headers=self.header, timeout=self.timeout)
-            resp.encoding = 'utf-8'
-            return resp.text
-        except Exception as e:
-            print(f"fetch error: {e}")
-            return ''
-
     def homeContent(self, filter):
-        """首页推荐"""
         result = {'class': [], 'list': []}
         for name, cid in zip(self.class_names, self.class_urls):
             result['class'].append({'type_name': name, 'type_id': cid})
 
-        # 默认加载电视剧列表
         url = f"{self.host}/drama/62c670dc1dca2d424404499c"
         html = self.fetch(url)
         nuxt = self.get_nuxt_data(html)
@@ -169,15 +178,18 @@ class Spider(Spider):
         return result
 
     def homeVideoContent(self):
-        """首页视频内容"""
         return {}
 
     def categoryContent(self, tid, pg, filter, extend):
-        """分类内容"""
         result = {'list': [], 'page': int(pg), 'pagecount': 999, 'limit': 24, 'total': 999999}
         parts = tid.split('/')
         alias = parts[0]
         cid = parts[1] if len(parts) > 1 else ''
+
+        # 直播频道特殊处理
+        if alias == 'live':
+            return self._live_category(tid, pg)
+
         url = f"{self.host}/{tid}"
         if int(pg) > 1:
             url += f"?page={pg}"
@@ -198,11 +210,35 @@ class Spider(Spider):
                 print(f"categoryContent parse error: {e}")
         return result
 
+    def _live_category(self, tid, pg):
+        result = {'list': [], 'page': int(pg), 'pagecount': 1, 'limit': 100, 'total': 0}
+        url = f"{self.host}/{tid}"
+        html = self.fetch(url)
+        nuxt = self.get_nuxt_data(html)
+        if nuxt:
+            try:
+                channels = nuxt.get('state', {}).get('pageList', {}).get('liveChannelsList', []) or []
+                vods = []
+                for ch in channels:
+                    v = self.make_vod_from_channel(ch)
+                    if v:
+                        vods.append(v)
+                result['list'] = vods
+                result['total'] = len(vods)
+            except Exception as e:
+                print(f"_live_category parse error: {e}")
+        return result
+
     def detailContent(self, ids):
-        """详情页"""
         if not ids or not ids[0]:
             return {'list': []}
         vid = ids[0]
+
+        # 直播频道
+        if vid.startswith('live@'):
+            ch_id = vid.replace('live@', '')
+            return self._live_detail(ch_id)
+
         parts = vid.split('$')
         route = parts[0] if len(parts) > 1 else 'play'
         sid = parts[1] if len(parts) > 1 else vid
@@ -240,8 +276,18 @@ class Spider(Spider):
             print(f"detailContent parse error: {e}")
             return {'list': []}
 
+    def _live_detail(self, ch_id):
+        # 直播频道直接返回播放地址
+        return {
+            'list': [{
+                'vod_id': 'live@' + ch_id,
+                'vod_name': ch_id,
+                'vod_play_from': 'ITalkBB直播',
+                'vod_play_url': f'直播${ch_id}'
+            }]
+        }
+
     def searchContent(self, key, quick, pg="1"):
-        """搜索"""
         url = f"{self.host}/?keyword={key}"
         html = self.fetch(url)
         nuxt = self.get_nuxt_data(html)
@@ -262,7 +308,6 @@ class Spider(Spider):
                             vod_list.append(v)
             except Exception as e:
                 print(f"searchContent parse error: {e}")
-        # 客户端过滤
         filtered = []
         for v in vod_list:
             if not v or not v.get('vod_name'):
@@ -274,7 +319,15 @@ class Spider(Spider):
         return {'list': self.unique_by_id(filtered)}
 
     def playerContent(self, flag, id, vipFlags):
-        """播放"""
+        # 直播频道
+        if id.startswith('live@'):
+            ch_id = id.replace('live@', '')
+            return {
+                'parse': 0,
+                'url': f'{self.host}/live/{ch_id}',
+                'header': self.header,
+                'playUrl': ''
+            }
         parts = id.split('@')
         route = parts[0] if len(parts) > 1 else 'play'
         sid = parts[1] if len(parts) > 1 else ''
@@ -283,11 +336,22 @@ class Spider(Spider):
         if eid:
             url += f"?ep={eid}"
         return {
-            'jx': 0,
             'parse': 1,
             'url': url,
-            'header': self.header
+            'header': self.header,
+            'playUrl': ''
         }
+
+    def fetch(self, url):
+        try:
+            resp = requests.get(url, headers=self.header, timeout=self.timeout)
+            resp.encoding = 'utf-8'
+            if resp.status_code == 200:
+                return resp.text
+            return None
+        except Exception as e:
+            print(f"fetch error: {e}")
+            return None
 
     def localProxy(self, param):
         return None
