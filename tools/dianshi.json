@@ -1,5 +1,5 @@
 {
-"spider":"./jar/spider.jar;md5;8432d174d72d5b608ae1bcd16d966847",
+"spider":"./jar/spider.jar;md5;c6985455e2cf0029e7901288a84f1e81",
 "lives":[
     {"name":"live","boot": false,"type":0,"url":"./tv.txt","playerType":2,"ua":"okhttp/3.8.1","timeout":20,"epg":"https://epg.cdn.loc.cc/?ch={name}&date={date}","logo":"https://logo.wyfc.qzz.io/{name}.png"}
 ],
@@ -13,6 +13,7 @@
 {"key":"新闪雷","name":"新闪雷┃MP4","type":3,"api":"./lib/drpy2.min.js","ext":"./js/新闪雷.js","header":{"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0"}},
 {"key":"闪雷","name":"闪雷┃MP4","type":3,"api":"./lib/drpy2.min.js","ext":"./js/678.js","header":{"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0"}},
 {"key":"fyyy","name":"飞宇影院","type":3,"api":"csp_XBPQ","searchable":1,"quickSearch":1,"filterable":1,"changeable":1,"ext":{"分类url":"http://ntfeiyu.com/nt/{cateId}/area/{area}/by/{by}/class/{class}/lang/{lang}/page/{catePg}/year/{year}.html","分类":"电影$1#电视剧$2#综艺$3#动漫$4"},"header":{"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0"}},
+{"key":"cupfox_in","name":"茶杯狐┃cupfox.in","type":3,"api":"./lib/drpy2.min.js","ext":"./js/茶杯狐.js","searchable":1,"quickSearch":1,"filterable":0,"changeable":1,"header":{"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0"}},
 {"key":"qiletv","name":"奇乐影视","type":3,"api":"csp_XBPQ","searchable":1,"quickSearch":1,"filterable":1,"changeable":1,"ext":"./json/奇乐.json","header":{"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0"}},
 
 
