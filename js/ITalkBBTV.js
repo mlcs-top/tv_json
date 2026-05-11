@@ -1,9 +1,13 @@
 function getNuxtData(html) {
-    var m = html.match(/window\.__NUXT__=(.*?);<\/script>/s);
+    var m = html.match(/window\.__NUXT__=([\s\S]*?);<\/script>/);
     if (!m) {
         return null;
     }
-    return eval(m[1]);
+    try {
+        return eval(m[1]);
+    } catch (e) {
+        return null;
+    }
 }
 
 function pickPic(obj) {
