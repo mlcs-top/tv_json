@@ -4,7 +4,6 @@
 ITalkBB TV - 海外华人影视
 """
 import re
-import json
 import requests
 from base.spider import Spider
 
@@ -37,7 +36,6 @@ class Spider(Spider):
         self.class_urls = 'drama/62c670dc1dca2d424404499c&live/62ac4e2e4beefe535864769d&shorts/66b1d25cf2dde82c215f9b59&variety/62ce7417c7daaa4a5d3fea14&movie/62ac4ef36e0b5a13ed291544&cartoon/62ac4e6e4beefe53586478ca'.split('&')
 
     def parse_list_page(self, html):
-        """从列表页HTML提取vod列表"""
         if not html:
             return []
         cards = re.findall(r'<a[^>]*href="(/(?:play|shortsPlay)/[a-f0-9]+)"[^>]*>(.*?)</a>', html, re.DOTALL)
@@ -48,7 +46,6 @@ class Spider(Spider):
             if sid in seen:
                 continue
             seen.add(sid)
-            # 名称: title属性 > info-title > alt中的《》
             name = ''
             title_match = re.search(r'title="([^"]+)"', content)
             if title_match:
@@ -61,17 +58,16 @@ class Spider(Spider):
                 alt_match = re.search(r'alt="[^"]*[《]([^》]+)[》]', content)
                 if alt_match:
                     name = alt_match.group(1).strip()
-            # 图片
             img_match = re.search(r'<img[^>]*src="([^"]+)"', content)
             pic = img_match.group(1) if img_match else ''
-            # 备注 (集数)
             remarks = ''
             ep_match = re.search(r'(全\d+集|更新至\d+集)', content)
             if ep_match:
                 remarks = ep_match.group(1)
             if name:
+                route = 'shortsPlay' if '/shortsPlay/' in href else 'play'
                 vods.append({
-                    'vod_id': ('shortsPlay$' if '/shortsPlay/' in href else 'play$') + sid,
+                    'vod_id': route + '$' + sid,
                     'vod_name': name,
                     'vod_pic': pic,
                     'vod_remarks': remarks
@@ -79,7 +75,6 @@ class Spider(Spider):
         return vods
 
     def parse_live_page(self, html):
-        """从直播页HTML提取频道列表"""
         if not html:
             return []
         m = re.search(r'window\.__NUXT__=([\s\S]*?);</script>', html)
@@ -94,12 +89,24 @@ class Spider(Spider):
                 continue
             seen.add(ch_id)
             vods.append({
-                'vod_id': 'live@' + ch_id,
+                'vod_id': 'live@' + ch_id + '@' + name,
                 'vod_name': name,
                 'vod_pic': '',
                 'vod_remarks': '直播'
             })
         return vods
+
+    def _get_live_name(self, ch_id):
+        """从直播页获取频道名称"""
+        html = self.fetch(self.host + '/live/62ac4e2e4beefe535864769d')
+        if not html:
+            return ch_id
+        m = re.search(r'window\.__NUXT__=([\s\S]*?);</script>', html)
+        if not m:
+            return ch_id
+        js = m.group(1)
+        match = re.search(r'\{[^{}]*id:"' + ch_id + r'"[^{}]*name:"([^"]+)"', js)
+        return match.group(1) if match else ch_id
 
     def homeContent(self, filter):
         result = {'class': [], 'list': []}
@@ -132,11 +139,17 @@ class Spider(Spider):
             return {'list': []}
         vid = ids[0]
 
-        # 直播频道
+        # 直播频道: live@ch_id 或 live@ch_id@name
         if vid.startswith('live@'):
-            ch_id = vid.replace('live@', '')
-            return {'list': [{'vod_id': vid, 'vod_name': ch_id,
-                              'vod_play_from': 'ITalkBB直播', 'vod_play_url': '直播$' + ch_id}]}
+            parts = vid.split('@', 2)
+            ch_id = parts[1] if len(parts) > 1 else ''
+            ch_name = parts[2] if len(parts) > 2 else self._get_live_name(ch_id)
+            return {'list': [{
+                'vod_id': vid,
+                'vod_name': ch_name,
+                'vod_play_from': 'ITalkBB直播',
+                'vod_play_url': '直播$' + ch_id
+            }]}
 
         parts = vid.split('$')
         route = parts[0] if len(parts) > 1 else 'play'
@@ -145,30 +158,45 @@ class Spider(Spider):
         if not html:
             return {'list': []}
 
+        # 从<title>提取名称
+        name = ''
+        title_match = re.search(r'<title>([^<|｜]+)', html)
+        if title_match:
+            name = title_match.group(1).strip()
+
         m = re.search(r'window\.__NUXT__=([\s\S]*?);</script>', html)
         if not m:
-            return {'list': []}
+            return {'list': [{'vod_id': vid, 'vod_name': name}]}
+
         js = m.group(1)
 
-        # 提取SeriesInfo (用.*?跳过嵌套对象)
-        name = ''
+        # 提取SeriesInfo (用花括号匹配)
         desc = ''
         pic = ''
-        info_match = re.search(r'SeriesInfo:\{(.*?)\},EpisodeList', js, re.DOTALL)
-        if info_match:
-            info = info_match.group(1)
-            nm = re.search(r'name:"([^"]*)"', info)
-            if nm: name = nm.group(1)
+        si_start = js.find('SeriesInfo:{')
+        if si_start >= 0:
+            depth = 0
+            i = si_start + len('SeriesInfo:')
+            while i < len(js):
+                if js[i] == '{': depth += 1
+                elif js[i] == '}':
+                    depth -= 1
+                    if depth == 0: break
+                i += 1
+            info = js[si_start:i+1]
             dm = re.search(r'description:"([^"]*)"', info)
             if dm: desc = dm.group(1)
             pm = re.search(r'poster:\["([^"]*)"', info)
             if pm: pic = pm.group(1).replace('\\u002F', '/').replace('\\u002f', '/')
+            # name可能是变量引用，只有当是字符串时才用
+            nm = re.search(r',name:"([^"]*)"', info)
+            if nm and nm.group(1):
+                name = nm.group(1)
 
-        # 演员/导演
         actor = '/'.join(re.findall(r'actor:\[\{[^}]*name:"([^"]+)"', js)[:5])
         director = '/'.join(re.findall(r'director:\[\{[^}]*name:"([^"]+)"', js))
 
-        # 提取EpisodeList中的剧集
+        # 提取EpisodeList
         eps = []
         ep_start = js.find('EpisodeList:[')
         if ep_start >= 0:
@@ -181,8 +209,11 @@ class Spider(Spider):
                     if depth == 0: break
                 i += 1
             ep_section = js[ep_start:i+1]
-            # 用.*?跳过嵌套的{}对象
             eps = re.findall(r'id:"([a-f0-9]{24})".*?name:"([^"]*?)".*?shortname:"([^"]*?)"', ep_section)
+            # 如果没匹配到shortname，尝试只匹配id和name
+            if not eps:
+                eps = re.findall(r'id:"([a-f0-9]{24})".*?name:"([^"]*)"', ep_section)
+                eps = [(eid, nm, '') for eid, nm in eps]
 
         tabs = 'ITalkBB短剧' if route == 'shortsPlay' else 'ITalkBB'
         play_urls = []
@@ -190,7 +221,11 @@ class Spider(Spider):
             display = ep_short or ep_name or ep_id[-4:]
             play_urls.append(display + '$' + route + '@' + sid + '@' + ep_id)
 
-        vod = {
+        # 电影如果没有剧集，构造单集播放
+        if not play_urls:
+            play_urls.append('播放$' + route + '@' + sid + '@')
+
+        return {'list': [{
             'vod_id': vid,
             'vod_name': name,
             'vod_pic': pic,
@@ -202,8 +237,7 @@ class Spider(Spider):
             'vod_director': director,
             'vod_play_from': tabs,
             'vod_play_url': '#'.join(play_urls)
-        }
-        return {'list': [vod]}
+        }]}
 
     def searchContent(self, key, quick, pg="1"):
         html = self.fetch(self.host + '/?keyword=' + key)
@@ -213,7 +247,8 @@ class Spider(Spider):
 
     def playerContent(self, flag, id, vipFlags):
         if id.startswith('live@'):
-            ch_id = id.replace('live@', '')
+            parts = id.split('@', 2)
+            ch_id = parts[1] if len(parts) > 1 else ''
             return {'parse': 1, 'url': self.host + '/live/' + ch_id,
                     'header': self.header, 'playUrl': ''}
         parts = id.split('@')
