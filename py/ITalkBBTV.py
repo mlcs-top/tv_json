@@ -197,7 +197,9 @@ class Spider(Spider):
                 return {'parse': 0, 'url': m3u8, 'header': {}, 'playUrl': ''}
             stream = self._get_live_stream(m3u8)
             return {'parse': 0, 'url': stream, 'header': {}, 'playUrl': ''}
-
+        # m3u8直链（从detailContent传过来的）
+        if id.startswith('http'):
+            return {'parse': 0, 'url': id, 'header': {}, 'playUrl': ''}
         # 点播
         parts = id.split('@')
         route = parts[0] if len(parts) > 1 else 'play'
