@@ -30,16 +30,16 @@ jobs:
           pwd 
           cd tools/
           pip install demjson3 --break-system-packages
-          python fty.py
+          # python fty.py
           python xiao.py ../xiaosa/api.json dianshi.json
           python xiao.py ../xiaosa/api.json jsm.json
           \cp -pdr tvbox_cleaned.json ../fty.json
           \cp -pdr dianshi_with_app_sites.json ../dianshi.json
           \cp -pdr jsm_with_app_sites.json ../jsm.json
-          \cp -pdr fan.txt ../jar/fan.txt
+          # \cp -pdr fan.txt ../jar/fan.txt
           \cp -pdr ../xiaosa/spider.jar ../jar/spider.jar
           git clone --depth=1 --recursive https://github.com/fantaiying7/EXT.git
-          \cp -pdr EXT/* ../FTY/
+          # \cp -pdr EXT/* ../FTY/
           python copy_xbpq.py dianshi_with_app_sites.json
           rm -rf dianshi_with_app_sites.json jsm_with_app_sites.json tvbox_cleaned.json fan.txt EXT
           cd ../
