@@ -14,7 +14,7 @@ session.cookies.set("visited", "1")  # 提高拟真度
 
 # 下载伪 JSON 文本
 def fetch_raw_json():
-    url = "http://www.xn--sss604efuw.net/jm/jiemi.php?url=http://www.饭太硬.net/tv"
+    url = "http://www.xn--sss604efuw.art/jm/jiemi.php?url=http%3A%2F%2Fwww.%E9%A5%AD%E5%A4%AA%E7%A1%AC.art%2Ftv"
     resp = session.get(url, timeout=30, allow_redirects=True)
     resp.encoding = 'utf-8'
     return resp.text
